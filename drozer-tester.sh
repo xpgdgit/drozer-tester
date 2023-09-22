@@ -2,6 +2,7 @@
 
 #
 ##set package_name "jakhar.aseem.diva"
+# exp_internal 1
 set timeout -1
 exec rm -f ./drozer-tester/drozer-tester.log
 exec mkdir -p ./drozer-tester/ 
@@ -68,6 +69,7 @@ proc scan_app {package_name} {
     set sqltables "run scanner.provider.sqltables -a $package_name"
     set traversal "run scanner.provider.traversal -a $package_name"
     set activity  "run app.activity.info -a $package_name"
+    set service   "run app.service.info -a $package_name"
 
    
 
@@ -95,14 +97,13 @@ proc scan_app {package_name} {
     puts  "\033\[32m\[\+\] 扫描 $package_name 暴露activity \r\033\[0m"
     send "$activity \r "
 
-
-    expect "dz>" {
-        puts "\033\[32m\[\+\] 扫描 $package_name 暴露的activity \r \033\[0m"
-        send "$activity \r"
         
-        expect "dz>" {
+    expect "dz>" {
             global  result_file
-            set activity_names [exec cat ${result_file} | sed -n "s/\\s${package_name}\\S\\w/&/p " | sort | uniq ]
+            # 修改为匹配到Permission: null的前一行
+            set activity_names [exec cat ${result_file} | sed -n "/Permission: null/{x;p;d;}; x" | sort | uniq ]
+             
+            # puts " \033\[32m\[\+\] 显示activity $activity_names  \033\[0m"
 
             set lines [split $activity_names "\n"]
 
@@ -135,11 +136,57 @@ proc scan_app {package_name} {
                 puts ""
             } else {
                 puts ""
-                puts "\033\[31m\[-\] 没有找到暴露的activity. 可能匹配规则遗漏，运行$activity 自查(・∀・) \033\[0m"
+                puts "\033\[31m\[-\] 没有找到暴露的activity. 可能匹配规则遗漏，运行$activity 自查 \033\[0m"
                 
             }
-        }
     }
+    
+    # expect "dz>"
+    # puts  "\033\[32m\[\+\] 扫描 $package_name 暴露service \r\033\[0m"
+    # send "$service \r "
+
+    # expect "dz>" {
+    #         global  result_file
+    #         # 修改为匹配到Permission: null的前一行
+    #         set service_names [exec cat ${result_file} | sed -n "/Permission: null/{x;p;d;}; x" | sort | uniq ]
+             
+    #         puts " \033\[32m\[\+\] 显示service $service_names  \033\[0m"
+
+    #         set lines [split $service_names "\n"]
+
+       
+    #         if {[llength $lines] > 0} {
+    #             # 创建service启动截图保存路径
+    #             exec mkdir -p ./drozer-tester/${package_name}
+    #             puts ""
+    #             puts  " \033\[32m\[\+\] 正在尝试启动暴露的service，请稍等 \033\[0m"
+                
+    #             foreach service_name $lines {
+    #                 # puts "Line: $activity_name"
+    #                 set trimmed_service_name [string trim $service_name] 
+    #                 set screenshot_file "tmp/$trimmed_service_name.png"
+                
+                    
+    #                 expect "" {
+    #                     send  "run   app.service.start --action $trimmed_service_name --component $package_name $trimmed_service_name \r"
+    #                     puts  "\033\[32m run   app.service.start  --action $trimmed_service_name --component $package_name $trimmed_service_name \r \033\[0m"
+    #                     sleep 1
+    #                     exec   adb  shell screencap -p '/sdcard/$screenshot_file'
+    #                     exec   adb  shell screencap -p '/sdcard/tmp/$trimmed_service_name.png'
+    #                     exec   adb  pull /sdcard/tmp/$trimmed_service_name.png   ./drozer-tester/${package_name}/
+    #                 }
+                    
+        
+    #             }
+    #             puts ""
+    #             puts "\033\[32m\[\+\]\[$package_name\] 扫描完成，请查看 \033\[0m"
+    #             puts ""
+    #         } else {
+    #             puts ""
+    #             puts "\033\[31m\[-\] 没有找到暴露的service. 可能匹配规则遗漏，运行$service 自查 \033\[0m"
+                
+    #         }
+    # }
 
 }
 
@@ -160,43 +207,11 @@ if {$argc < 1} {
 }
 
 
-if {[lindex $argv 0] eq "--all" || [lindex $argv 0] eq "-all" || [lindex $argv 0] eq "all" } {
-    set package_list [exec adb shell pm list packages]
-    
-    # 将结果保存到文件中
-    set package_file "./drozer-tester/package_list.txt"
-    exec echo "$package_list" > $package_file 
-    
-    set packages_count [exec cat $package_file | wc -l ]
-    set packages_count [expr $packages_count - 1]
-    puts "\033\[1m\033\[32m\[\+\]一共有：$packages_count 个应用\033\[0m"
-    puts ""
-    # 使用 for 循环扫描所有包名
-    set file [open $package_file r]
-    set line_count 0
-    while {[gets $file line] != -1} {
-        incr line_count
-        set package [lindex [split $line ":"] 1]
-        #puts $line
-        scan_app $package
-    }
 
-    close $file
-    global  result_file
-    puts ""
-    puts "\033\[1m\033\[32m\[\+\]运行日志文件为$result_file \033\[0m "
-    puts ""
-    puts "文件总行数：$line_count"
-    
-    # 删除临时文件
-    exec rm -f $package_file
-}  else {
     set package_name [lindex $argv 0]
     scan_app $package_name
     global  result_file
     puts ""
     puts "\033\[1m\033\[32m\[\+\]运行日志文件为$result_file \033\[1m "
     puts ""
-}
-
 
